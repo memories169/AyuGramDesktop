@@ -48,7 +48,8 @@ jobs:
             libxcb-image0-dev libxcb-util-dev libx11-xcb-dev libxtst-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libprotobuf-dev protobuf-compiler qt6-wayland ccache
+            libprotobuf-dev protobuf-compiler qt6-wayland ccache \
+            libfmt-dev # BỔ SUNG THƯ VIỆN FMT
 
       - name: Force Protobuf Detection
         run: |
@@ -90,13 +91,13 @@ jobs:
           git submodule update --init --recursive
           mkdir -p build && cd build
           
-          # Đã viết lại lệnh CMake trên một dòng hoặc nối dòng cẩn thận để tránh lỗi Parse error
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="/usr/local" \
             -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
+            -DCMAKE_POLICY_DEFAULT_CMP0144=NEW \
             -DDESKTOP_APP_USE_PACKAGED=OFF \
             -DBoost_NO_BOOST_CMAKE=ON \
             -DBOOST_ROOT=/usr \
@@ -121,6 +122,6 @@ jobs:
         with:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
-          body: "Build thành công. Đã sửa lỗi Parse error trong CMake tham số."
+          body: "Build hoàn tất. Đã bổ sung thư viện libfmt để xử lý lỗi format library."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
