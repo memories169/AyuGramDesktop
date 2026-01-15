@@ -88,11 +88,39 @@ jobs:
       - name: Build AyuGram
         run: |
           git submodule update --init --recursive
-          mkdir build && cd build
+          mkdir -p build && cd build
           
+          # Đã viết lại lệnh CMake trên một dòng hoặc nối dòng cẩn thận để tránh lỗi Parse error
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="/usr/local" \
-            -DCMAKE_POLICY_
+            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
+            -DDESKTOP_APP_USE_PACKAGED=OFF \
+            -DBoost_NO_BOOST_CMAKE=ON \
+            -DBOOST_ROOT=/usr \
+            -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
+            -DTDESKTOP_API_ID=2040 \
+            -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
+          
+          ninja -j 2
+
+      - name: Create AppImage
+        run: |
+          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage
+          mkdir -p AppDir/usr/bin
+          find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
+          export VERSION=${{ github.ref_name }}
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+          mv *.AppImage AyuGram-Linux-x86_64.AppImage
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: AyuGram-Linux-x86_64.AppImage
+          name: AyuGram Release ${{ github.ref_name }}
+          body: "Build thành công. Đã sửa lỗi Parse error trong CMake tham số."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
