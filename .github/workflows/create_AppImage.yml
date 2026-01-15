@@ -127,5 +127,4 @@ jobs:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GI
-          THUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
