@@ -1,4 +1,4 @@
-name: Build AyuGram Ultimate
+name: Build AyuGram Ultimate with Cache
 
 on:
   push:
@@ -24,6 +24,15 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo apt-get clean
 
+      # 1. CACHE CHO CCACHE (Lưu trữ các file .o đã biên dịch)
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+          max-size: 2G
+
       - name: Install System Dependencies
         run: |
           sudo apt-get update
@@ -39,60 +48,66 @@ jobs:
             libxcb-image0-dev libxcb-util-dev libx11-xcb-dev libxtst-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libprotobuf-dev protobuf-compiler qt6-wayland
+            libprotobuf-dev protobuf-compiler qt6-wayland ccache
 
+      # 2. CACHE CHO QT (Tránh tải lại 1-2GB Qt mỗi lần build)
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/Qt
+          key: ${{ runner.os }}-qt-6.5.3-shadertools-imageformats
+          
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.5.3'
-          host: 'linux'
-          target: 'desktop'
-          arch: 'gcc_64'
+          dir: ${{ github.workspace }}
+          cached: ${{ steps.cache-qt.outputs.cache-hit }}
           modules: 'qtimageformats qtshadertools'
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
-          git clone https://github.com/ada-url/ada.git
-          cd ada
-          git checkout v2.7.4
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
-          cmake --build build
-          sudo cmake --install build
+          if [ ! -f /usr/local/lib/libada.a ]; then
+            git clone https://github.com/ada-url/ada.git
+            cd ada && git checkout v2.7.4
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
+            cmake --build build
+            sudo cmake --install build
+          fi
 
       - name: Build AyuGram
         run: |
-          # Đồng bộ lại submodule để chắc chắn không thiếu code nội bộ
           git submodule update --init --recursive
-          
           mkdir build && cd build
           
-          # Cấu hình tổng hợp các flag sửa lỗi:
+          # Sử dụng CMAKE_CXX_COMPILER_LAUNCHER để kích hoạt ccache
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="/usr/local" \
             -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
             -DDESKTOP_APP_USE_PACKAGED=OFF \
             -DBoost_NO_BOOST_CMAKE=ON \
             -DBOOST_ROOT=/usr \
             -DProtobuf_USE_STATIC_LIBS=OFF \
+            -DProtobuf_LIBRARY=/usr/lib/x86_64-linux-gnu/libprotobuf.so \
+            -DProtobuf_INCLUDE_DIR=/usr/include \
+            -DProtobuf_PROTOC_EXECUTABLE=/usr/bin/protoc \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
-          # Build giới hạn luồng để tránh tràn RAM 7GB của GitHub
           ninja -j 2
 
       - name: Create AppImage
         run: |
           wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
-          
           mkdir -p AppDir/usr/bin
-          # Tự động tìm file thực thi và đưa vào AppImage
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
-          
           export VERSION=${{ github.ref_name }}
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          
           mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
       - name: Release
@@ -100,6 +115,6 @@ jobs:
         with:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
-          body: "Build hoàn tất với đầy đủ thư viện Ada, Boost, Protobuf."
+          body: "Build thành công (với Cache). Tiết kiệm thời gian cho lần build tới."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
