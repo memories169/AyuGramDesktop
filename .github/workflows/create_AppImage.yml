@@ -44,29 +44,41 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
-      - name: Force Library Detection (Fix rnnoise Description)
+      - name: Fix Ada Library (v2.7.4 Stable)
         run: |
-          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/cmake/tde2e /usr/local/lib/pkgconfig
+          git clone https://github.com/ada-url/ada.git
+          cd ada && git checkout v2.7.4
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
+          cmake --build build
+          sudo cmake --install build
+
+      - name: Force Library Detection (Fake Configs for all)
+        run: |
+          # Tạo thư mục chứa các file config giả
+          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada /usr/local/lib/pkgconfig
           
-          # 1. Fake Protobuf & OpenAL
+          # 1. Fake Protobuf
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
+          
+          # 2. Fake OpenAL
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
           
-          # 2. Fake tde2e
+          # 3. Fake tde2e
           echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
           echo 'add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
 
-          # 3. Fake RNNoise (Bổ sung Description để Pkg-config không báo lỗi)
+          # 4. Fake Ada (Chỉ định đúng thư viện đã cài ở bước trước)
+          echo 'set(ada_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo 'add_library(ada::ada UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo 'set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+
+          # 5. Fake RNNoise (Có Description đầy đủ)
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
           prefix=/usr
-          exec_prefix=\${prefix}
-          libdir=\${exec_prefix}/lib/x86_64-linux-gnu
-          includedir=\${prefix}/include
           Name: rnnoise
-          Description: RNN-based noise suppression library fake config
+          Description: RNN-based noise suppression library fake
           Version: 0.4.1
-          Libs: -L\${libdir} -lrnnoise
-          Cflags: -I\${includedir}
+          Libs: -lrnnoise
           EOF
 
       - name: Setup Qt
@@ -78,7 +90,7 @@ jobs:
 
       - name: Build AyuGram
         env:
-          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive --force
@@ -93,6 +105,7 @@ jobs:
             -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
             -Dtde2e_DIR=/usr/local/lib/cmake/tde2e \
+            -Dada_DIR=/usr/local/lib/cmake/ada \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
@@ -114,4 +127,5 @@ jobs:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GI
+          THUB_TOKEN }}
