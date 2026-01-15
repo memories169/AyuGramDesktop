@@ -24,14 +24,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo apt-get clean
 
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-ccache-${{ github.ref_name }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-
-          max-size: 2G
-
       - name: Install All Dependencies
         run: |
           sudo apt-get update
@@ -52,15 +44,24 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
-      - name: Force Library Detection (Fake Configs)
+      - name: Force Library Detection (Protobuf, OpenAL, RNNoise)
         run: |
+          # Fake Protobuf & OpenAL
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/pkgconfig
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
+          
+          # Fake RNNoise .pc file để vượt qua bước pkg_check_modules
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
+          prefix=/usr
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib/x86_64-linux-gnu
+          includedir=\${prefix}/include
           Name: rnnoise
+          Description: Fake rnnoise for cmake
           Version: 0.4.1
-          Libs: -lrnnoise
+          Libs: -L\${libdir} -lrnnoise
+          Cflags: -I\${includedir}
           EOF
 
       - name: Setup Qt
@@ -81,16 +82,16 @@ jobs:
           fi
 
       - name: Build AyuGram
+        env:
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
         run: |
-          # BƯỚC QUAN TRỌNG: Ép buộc cập nhật tất cả submodule để sửa lỗi tde2e
+          # Cập nhật submodule triệt để
           git submodule sync --recursive
           git submodule update --init --recursive --force
           
           mkdir -p build && cd build
-          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
           
-          # Flag DCMAKE_DISABLE_FIND_PACKAGE_tde2e=ON thường được dùng để 
-          # ép dự án sử dụng mã nguồn trong ThirdParty thay vì tìm package hệ thống
+          # Flag -DDESKTOP_APP_USE_PACKAGED=OFF là chìa khóa để nó tự build rnnoise/tde2e từ ThirdParty
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -101,7 +102,6 @@ jobs:
             -DBoost_NO_BOOST_CMAKE=ON \
             -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
-            -DCMAKE_DISABLE_FIND_PACKAGE_tde2e=ON \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
