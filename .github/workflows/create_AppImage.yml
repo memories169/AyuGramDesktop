@@ -1,90 +1,3 @@
-name: Build AyuGram .AppImage (Docker)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build-appimage:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 1440
-    permissions:
-      contents: write
-
-    steps:
-      # 1. Checkout code
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: false
-
-      # 2. Sync code từ AyuGram
-      - name: Sync upstream AyuGram
-        run: |
-          git remote add upstream https://github.com/AyuGram/AyuGramDesktop.git || true
-          git fetch upstream --tags
-          git checkout dev || git checkout master
-          git reset --hard upstream/dev || git reset --hard upstream/master
-
-      # 3. Xử lý Submodules
-      - name: Fix submodules
-        run: |
-          git submodule init
-          git config submodule.Telegram/lib_ui.url https://github.com/desktop-app/lib_ui.git || true
-          git config submodule.Telegram/ThirdParty/tgcalls.url https://github.com/TelegramMessenger/tgcalls.git || true
-          git submodule sync --recursive
-          git submodule update --init --recursive --force
-
-      # 4. Lấy version
-      - name: Get version
-        run: |
-          TAG=$(git describe --tags --abbrev=0)
-          VERSION=${TAG#v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "TAG=$TAG" >> $GITHUB_ENV
-
-      # 5. Cache ccache
-      - name: Restore ccache
-        uses: actions/cache@v4
-        with:
-          path: .ccache
-          key: ccache-docker-appimage-${{ runner.os }}-${{ env.VERSION }}
-          restore-keys: |
-            ccache-docker-appimage-${{ runner.os }}-
-
-      # 6. Build trong Docker (ĐÃ SỬA LỖI CCACHE)
-      - name: Build in Docker
-        run: |
-          mkdir -p out .ccache
-          docker run --rm \
-            -u root \
-            -e CCACHE_DIR=/usr/src/tdesktop/.ccache \
-            -v "$PWD:/usr/src/tdesktop" \
-            ghcr.io/telegramdesktop/tdesktop/centos_env:latest \
-            bash -c "
-              # Tự động cài đặt ccache nếu chưa có
-              if ! command -v ccache &> /dev/null; then
-                  echo 'Installing ccache...'
-                  yum install -y epel-release
-                  yum install -y ccache
-              fi
-              
-              # Cấu hình ccache
-              export PATH=/usr/lib64/ccache:\$PATH &&
-              ccache -M 10G &&
-              
-              # Bắt đầu build
-              /usr/src/tdesktop/Telegram/build/docker/centos_env/build.sh \
-                -D TDESKTOP_API_ID=2040 \
-                -D TDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627 \
-                -D DESKTOP_APP_USE_PACKAGED=OFF
-            "
-
-      # 7. Fix quyền file
-      - name: Fix permissions
-        run: |
-          sudo chown -R $USER:$USER .
-
       # 8. Đóng gói AppImage
       - name: Package AppImage
         run: |
@@ -126,14 +39,18 @@ jobs:
           StartupWMClass=AyuGram
           EOF
 
+          # Đặt biến VERSION để linuxdeploy tự động đặt tên file
           export VERSION=${{ env.VERSION }}
+          
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --output appimage \
             --desktop-file AppDir/usr/share/applications/ayugram.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/ayugram.png
 
-          mv AyuGram*.AppImage AyuGram-${{ env.VERSION }}-x86_64.AppImage
+          # ĐÃ XÓA LỆNH mv GÂY LỖI
+          # Kiểm tra file kết quả
+          ls -lh *.AppImage
 
       # 9. Release
       - name: Upload Release
@@ -144,5 +61,6 @@ jobs:
           body: |
             AyuGram Portable AppImage.
             Built with Docker (CentOS 7 Env).
-          files: AyuGram-${{ env.VERSION }}-x86_64.AppImage
-          
+          # Dùng wildcard (*) để tự bắt đúng tên file linuxdeploy sinh ra
+          files: AyuGram-*-x86_64.Ap
+          pImage
