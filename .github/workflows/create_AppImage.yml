@@ -1,4 +1,4 @@
-name: Build and Release AyuGram AppImage
+name: Build AyuGram Professional
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -21,24 +21,25 @@ jobs:
 
       - name: Free Disk Space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo apt-get clean
+          df -h
 
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build pkg-config python3 \
+            build-essential cmake ninja-build pkg-config python3 python3-pip \
             libvulkan-dev vulkan-tools libwayland-dev wayland-protocols \
-            libavformat-dev libavcodec-dev libswresample-dev \
-            libswscale-dev libopus-dev libva-dev libvdpau-dev \
-            libasound2-dev libpulse-dev libgtk-3-dev \
-            libxcb-keysyms1-dev libxcb-record0-dev \
-            libxcb-screensaver0-dev libxcb-composite0-dev \
-            libxcb-ewmh-dev libxcb-icccm4-dev libxcb-image0-dev \
-            libxcb-util-dev libx11-xcb-dev libxtst-dev \
-            liblzma-dev libssl-dev libxcb-xkb-dev libxkbcommon-x11-dev \
-            libenchant-2-dev libsecret-1-dev libhunspell-dev
+            libboost-all-dev libssl-dev libxxhash-dev liblzma-dev \
+            libavformat-dev libavcodec-dev libswresample-dev libswscale-dev \
+            libopus-dev libva-dev libvdpau-dev libasound2-dev libpulse-dev \
+            libgtk-3-dev libsecret-1-dev libhunspell-dev libenchant-2-dev \
+            libxcb-keysyms1-dev libxcb-record0-dev libxcb-screensaver0-dev \
+            libxcb-composite0-dev libxcb-ewmh-dev libxcb-icccm4-dev \
+            libxcb-image0-dev libxcb-util-dev libx11-xcb-dev libxtst-dev \
+            libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
+            libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev
 
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
@@ -47,58 +48,62 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'gcc_64'
-          modules: 'qtimageformats qtshadertools'
+          modules: 'qtimageformats qtshadertools qtwayland'
 
-      # CHIẾN THUẬT MỚI: Build và cài đặt ADA trực tiếp vào hệ thống Runner
+      # KHẮC PHỤC LỖI ADA: Build và cài đặt thủ công vào hệ thống
       - name: Build and Install Ada URL Library
         run: |
           git clone https://github.com/ada-url/ada.git
           cd ada
-          git checkout v2.7.4
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
           cmake --build build
           sudo cmake --install build
-          # Kiểm tra xem adaConfig.cmake đã nằm trong hệ thống chưa
-          find /usr/local/lib/cmake/ada -name "*.cmake"
 
       - name: Build AyuGram
         run: |
-          # Cập nhật các submodule khác của AyuGram
+          # Đảm bảo các submodule nội bộ được tải (nếu có)
           git submodule update --init --recursive
           
-          mkdir build_ayugram
-          cd build_ayugram
+          mkdir build
+          cd build
           
-          # Cấu hình CMake cho AyuGram
-          # Chúng ta trỏ CMAKE_PREFIX_PATH vào /usr/local để chắc chắn nó thấy ada
+          # CẤU HÌNH CMAKE KHẮC PHỤC LỖI BOOST & ADA:
+          # 1. -DBoost_NO_BOOST_CMAKE=ON: Ép dùng module tìm kiếm của CMake thay vì file config lỗi của Ubuntu
+          # 2. -DDESKTOP_APP_USE_PACKAGED=OFF: Ưu tiên dùng thư viện đi kèm cho các thành phần nhỏ
+          # 3. -DCMAKE_PREFIX_PATH: Chỉ định nơi chứa Ada vừa cài đặt
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
+            -DBoost_NO_BOOST_CMAKE=ON \
+            -DBOOST_ROOT=/usr \
             -DDESKTOP_APP_USE_PACKAGED=OFF \
-            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW
+            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
+            -DTDESKTOP_API_ID=2040 \
+            -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
+          # Build với 2 luồng để không bị cháy RAM trên GitHub Actions
           ninja -j 2
 
-      - name: Prepare and Create AppImage
+      - name: Create AppImage
         run: |
           wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
-          # Tìm file binary trong build_ayugram/bin
-          find build_ayugram/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
+          # Tự động tìm file thực thi dù nó tên là ayugram hay telegram-desktop
+          find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
           
+          # Tạo AppImage (linuxdeploy tự tìm .desktop và icon trong repo)
           export VERSION=${{ github.ref_name }}
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           
-          mv *.AppImage AyuGram-${{ github.ref_name }}-x86_64.AppImage
+          mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
-      - name: Create Release
+      - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: AyuGram-*.AppImage
+          files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          body: "Bản build tự động thành công. Bao gồm đầy đủ dependencies."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
