@@ -40,6 +40,7 @@ jobs:
             libvulkan-dev vulkan-tools libwayland-dev wayland-protocols \
             libboost-all-dev libssl-dev libxxhash-dev liblzma-dev \
             libavformat-dev libavcodec-dev libswresample-dev libswscale-dev \
+            libavfilter-dev libavdevice-dev libpostproc-dev \
             libopus-dev libva-dev libvdpau-dev libasound2-dev libpulse-dev \
             libgtk-3-dev libsecret-1-dev libhunspell-dev libenchant-2-dev \
             libxcb-keysyms1-dev libxcb-record0-dev libxcb-screensaver0-dev \
@@ -49,7 +50,6 @@ jobs:
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libprotobuf-dev protobuf-compiler qt6-wayland ccache
 
-      # CHIẾN THUẬT MỚI: Ép CMake nhận diện Protobuf bằng cách tạo config giả
       - name: Force Protobuf Detection
         run: |
           sudo mkdir -p /usr/local/lib/cmake/protobuf
@@ -95,31 +95,4 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="/usr/local" \
-            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
-            -DDESKTOP_APP_USE_PACKAGED=OFF \
-            -DBoost_NO_BOOST_CMAKE=ON \
-            -DBOOST_ROOT=/usr \
-            -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
-            -DTDESKTOP_API_ID=2040 \
-            -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
-          
-          ninja -j 2
-
-      - name: Create AppImage
-        run: |
-          wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
-          mkdir -p AppDir/usr/bin
-          find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
-          export VERSION=${{ github.ref_name }}
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          mv *.AppImage AyuGram-Linux-x86_64.AppImage
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: AyuGram-Linux-x86_64.AppImage
-          name: AyuGram Release ${{ github.ref_name }}
-          body: "Build thành công với cơ chế ép cấu hình Protobuf."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            -DCMAKE_POLICY_
