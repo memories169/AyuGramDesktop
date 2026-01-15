@@ -52,53 +52,29 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
-      # CHIẾN THUẬT: Tạo Config giả cho Protobuf, OpenAL và RNNoise
-      - name: Force Library Detection
+      - name: Force Library Detection (Protobuf, OpenAL, RNNoise)
         run: |
-          # 1. Fake Protobuf
-          sudo mkdir -p /usr/local/lib/cmake/protobuf
+          # Fake Protobuf & OpenAL (Như các bước trước)
+          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/pkgconfig
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          echo 'add_library(protobuf::libprotobuf UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          echo 'set_target_properties(protobuf::libprotobuf PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libprotobuf.so" INTERFACE_INCLUDE_DIRECTORIES "/usr/include")' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          echo 'add_executable(protobuf::protoc IMPORTED)' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          echo 'set_target_properties(protobuf::protoc PROPERTIES IMPORTED_LOCATION "/usr/bin/protoc")' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-
-          # 2. Fake OpenAL
-          sudo mkdir -p /usr/local/lib/cmake/OpenAL
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-          echo 'add_library(OpenAL::OpenAL UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-          echo 'set_target_properties(OpenAL::OpenAL PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libopenal.so" INTERFACE_INCLUDE_DIRECTORIES "/usr/include/AL")' | sudo tee -a /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-
-          # 3. Fake RNNoise (Tạo file .pc cho pkg-config)
-          sudo mkdir -p /usr/local/lib/pkgconfig
+          
+          # Fake RNNoise
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
-          prefix=/usr
-          exec_prefix=\${prefix}
-          libdir=\${exec_prefix}/lib/x86_64-linux-gnu
-          includedir=\${prefix}/include
           Name: rnnoise
           Description: RNN-based noise suppression
           Version: 0.4.1
-          Libs: -L\${libdir} -lrnnoise
-          Cflags: -I\${includedir}
+          Libs: -lrnnoise
           EOF
 
-      - name: Cache Qt
-        id: cache-qt
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/Qt
-          key: ${{ runner.os }}-qt-6.5.3-shadertools-imageformats
-          
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.5.3'
           dir: ${{ github.workspace }}
-          cached: ${{ steps.cache-qt.outputs.cache-hit }}
           modules: 'qtimageformats qtshadertools'
 
-      - name: Fix Ada Library (v2.7.4 Stable)
+      - name: Build and Install Ada (v2.7.4)
         run: |
           if [ ! -f /usr/local/lib/libada.a ]; then
             git clone https://github.com/ada-url/ada.git
@@ -110,22 +86,24 @@ jobs:
 
       - name: Build AyuGram
         run: |
+          # Đảm bảo submodule tde2e và các thành phần khác được tải
+          git submodule sync --recursive
           git submodule update --init --recursive
-          mkdir -p build && cd build
           
-          # Cập nhật PKG_CONFIG_PATH để CMake thấy file rnnoise.pc giả
+          mkdir -p build && cd build
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
           
+          # THÊM FLAG -DTDESKTOP_BUILD_USE_IDN=OFF hoặc lân cận nếu cần
+          # Cờ quan trọng nhất: -DDESKTOP_APP_USE_PACKAGED=OFF 
+          # giúp CMake ưu tiên build tde2e từ source thay vì tìm file config.
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="/usr/local" \
             -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
-            -DCMAKE_POLICY_DEFAULT_CMP0144=NEW \
             -DDESKTOP_APP_USE_PACKAGED=OFF \
             -DBoost_NO_BOOST_CMAKE=ON \
-            -DBOOST_ROOT=/usr \
             -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
             -DTDESKTOP_API_ID=2040 \
@@ -139,10 +117,8 @@ jobs:
           chmod +x linuxdeploy-x86_64.AppImage
           mkdir -p AppDir/usr/bin
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
-          
           export VERSION=${{ github.ref_name }}
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          
           mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
       - name: Release
