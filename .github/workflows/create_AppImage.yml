@@ -26,7 +26,6 @@ jobs:
 
       - name: Install All Dependencies
         run: |
-          # Đảm bảo bật các repo universe/multiverse để tìm thấy openh264
           sudo add-apt-repository universe
           sudo add-apt-repository multiverse
           sudo apt-get update
@@ -48,8 +47,8 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
             libvpx-dev gobject-introspection libgirepository1.0-dev \
-            libabsl-dev yasm libpipewire-0.3-dev libdrm-dev libgbm-dev \
-            libopenh264-dev libusrsctp-dev # <--- ĐÃ THÊM OPENH264 VÀ USRSCTP
+            yasm libpipewire-0.3-dev libdrm-dev libgbm-dev \
+            libopenh264-dev libusrsctp-dev # <--- ĐÃ BỎ libabsl-dev
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -59,12 +58,30 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
+      - name: Build Abseil (Manual Build)
+        # Bắt buộc phải build bản mới để có nullability.h
+        run: |
+          git clone https://github.com/abseil/abseil-cpp.git
+          cd abseil-cpp
+          # Sử dụng phiên bản LTS 2024 để đảm bảo tính ổn định và mới
+          git checkout 20240116.1 
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DABSL_PROPAGATE_CXX_STD=ON \
+            -DBUILD_TESTING=OFF
+          cmake --build build
+          sudo cmake --install build
+
       - name: Build crc32c (Manual Build)
         run: |
           git clone https://github.com/google/crc32c.git
           cd crc32c
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             -DCRC32C_BUILD_TESTS=OFF \
             -DCRC32C_BUILD_BENCHMARKS=OFF \
             -DCRC32C_USE_GLOG=OFF
@@ -142,6 +159,8 @@ jobs:
           
           git submodule update --init --recursive
           
+          # Lưu ý: Không đặt -DTG_OWT_USE_ABSL=ON vì nó sẽ cố tìm absl hệ thống
+          # CMake sẽ tự tìm thấy bản absl mới mà ta vừa cài đặt vào /usr/local
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
