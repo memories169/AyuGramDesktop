@@ -43,7 +43,8 @@ jobs:
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
-            libvpx-dev # <--- ĐÃ THÊM THƯ VIỆN VPX (Sửa lỗi No package vpx)
+            libvpx-dev \
+            gobject-introspection libgirepository1.0-dev # <--- ĐÃ THÊM GÓI NÀY (Sửa lỗi g-ir-scanner)
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -55,7 +56,6 @@ jobs:
 
       - name: Force Library Detection (Fake Configs)
         run: |
-          # Tạo thư mục
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL \
                         /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada \
                         /usr/local/lib/cmake/tg_owt /usr/local/lib/pkgconfig
@@ -73,14 +73,13 @@ jobs:
           echo '  set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
           echo 'endif()' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
 
-          # 4. Fake tde2e (SỬA LỖI TRÙNG LẶP TARGET)
-          # Thêm điều kiện if(NOT TARGET) để không tạo lại nếu đã có
+          # 4. Fake tde2e
           echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
           echo 'if(NOT TARGET desktop-app::external_tde2e)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
           echo '  add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
           echo 'endif()' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
 
-          # 5. Fake tg_owt (SỬA LỖI MỚI)
+          # 5. Fake tg_owt
           echo 'set(tg_owt_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
           echo 'if(NOT TARGET tg_owt::tg_owt)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
           echo '  add_library(tg_owt::tg_owt INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
@@ -106,7 +105,6 @@ jobs:
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
         run: |
-          # Đồng bộ Submodule cực mạnh cho cả tg_owt
           git submodule sync --recursive
           git submodule update --init --recursive --force
 
