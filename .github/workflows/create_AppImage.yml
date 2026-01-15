@@ -49,7 +49,7 @@ jobs:
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
-            libfmt-dev libopenal-dev libgoogle-perftools-dev \
+            libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
       - name: Force Protobuf Detection
@@ -120,8 +120,6 @@ jobs:
           mkdir -p AppDir/usr/share/applications
           
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
-          
-          # Cố gắng tìm icon lớn nhất để gán cho AppImage
           find . -name "*512*.png" -exec cp {} AppDir/usr/share/icons/hicolor/512x512/apps/ayugram.png \;
           
           cat > AppDir/usr/share/applications/ayugram.desktop <<EOF
@@ -141,11 +139,5 @@ jobs:
           
           mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: AyuGram-Linux-x86_64.AppImage
-          name: AyuGram Release ${{ github.ref_name }}
-          body: "Bản build thành công. RNNoise sẽ được build từ mã nguồn nội bộ của dự án."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Checksum
+        run: sha256sum AyuGram-Linux-x86_64.AppImage > sha
