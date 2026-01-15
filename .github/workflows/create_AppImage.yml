@@ -39,7 +39,8 @@ jobs:
             libxcb-composite0-dev libxcb-ewmh-dev libxcb-icccm4-dev \
             libxcb-image0-dev libxcb-util-dev libx11-xcb-dev libxtst-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
-            libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+            libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            qt6-wayland # Cài đặt wayland từ apt thay vì module Qt của aqt
 
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
@@ -48,9 +49,9 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'gcc_64'
-          modules: 'qtimageformats qtshadertools qtwayland'
+          # Chỉ giữ lại các module chắc chắn tồn tại và cần thiết
+          modules: 'qtimageformats qtshadertools'
 
-      # KHẮC PHỤC LỖI ADA: Build và cài đặt thủ công vào hệ thống
       - name: Build and Install Ada URL Library
         run: |
           git clone https://github.com/ada-url/ada.git
@@ -61,16 +62,10 @@ jobs:
 
       - name: Build AyuGram
         run: |
-          # Đảm bảo các submodule nội bộ được tải (nếu có)
           git submodule update --init --recursive
+          mkdir build && cd build
           
-          mkdir build
-          cd build
-          
-          # CẤU HÌNH CMAKE KHẮC PHỤC LỖI BOOST & ADA:
-          # 1. -DBoost_NO_BOOST_CMAKE=ON: Ép dùng module tìm kiếm của CMake thay vì file config lỗi của Ubuntu
-          # 2. -DDESKTOP_APP_USE_PACKAGED=OFF: Ưu tiên dùng thư viện đi kèm cho các thành phần nhỏ
-          # 3. -DCMAKE_PREFIX_PATH: Chỉ định nơi chứa Ada vừa cài đặt
+          # Cấu hình CMake với các flag sửa lỗi Boost và Ada
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
@@ -81,7 +76,7 @@ jobs:
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
-          # Build với 2 luồng để không bị cháy RAM trên GitHub Actions
+          # Sử dụng 2 luồng để tránh lỗi OOM (Out of Memory)
           ninja -j 2
 
       - name: Create AppImage
@@ -90,10 +85,9 @@ jobs:
           chmod +x linuxdeploy-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
-          # Tự động tìm file thực thi dù nó tên là ayugram hay telegram-desktop
+          # Tìm file binary trong thư mục build/bin
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
           
-          # Tạo AppImage (linuxdeploy tự tìm .desktop và icon trong repo)
           export VERSION=${{ github.ref_name }}
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           
@@ -104,6 +98,6 @@ jobs:
         with:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
-          body: "Bản build tự động thành công. Bao gồm đầy đủ dependencies."
+          body: "Bản build tự động AyuGram AppImage thành công."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
