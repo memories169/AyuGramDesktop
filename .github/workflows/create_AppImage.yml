@@ -17,15 +17,23 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
+
+      # Bước này cực kỳ quan trọng đối với các dự án lớn như AyuGram
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo apt-get clean
+          df -h
 
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
-            python3 python3-pip \
-            libvulkan-dev vulkan-tools \
+            python3 python3-pip libvulkan-dev vulkan-tools \
             libavformat-dev libavcodec-dev libswresample-dev \
             libswscale-dev libopus-dev libva-dev libvdpau-dev \
             libasound2-dev libpulse-dev libgtk-3-dev \
@@ -40,25 +48,27 @@ jobs:
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.5.3'
-          # Lưu ý: AyuGram đôi khi cần module qtimageformats, qtwayland
-          modules: 'qtimageformats qtwayland'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'gcc_64'
+          # Đã sửa tên module cho Qt6
+          modules: 'qtimageformats' 
+          # Lưu ý: qtwayland thường đã có sẵn trong bản build mặc định của aqt cho Linux, 
+          # nếu vẫn báo thiếu bạn có thể thử thêm 'qtwayland' mà không có tiền tố.
 
       - name: Build AyuGram
         run: |
-          # Đảm bảo các submodule được cập nhật đầy đủ lần cuối
-          git submodule update --init --recursive
-          
           mkdir build
           cd build
-          # Thêm các flag để giúp CMake tìm thấy thư viện tốt hơn
+          # Thêm cờ -DDESKTOP_APP_USE_PACKAGED=OFF để nó tự build các thư viện thiếu (như ada)
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
-            -DDESKTOP_APP_USE_PACKAGED=OFF \
-            -DTDESKTOP_API_ID=YOUR_ID \
-            -DTDESKTOP_API_HASH=YOUR_HASH
+            -DDESKTOP_APP_USE_PACKAGED=OFF
           
-          # Giới hạn số luồng build để tránh lỗi RAM trên GitHub Actions
-          ninja -j $(nproc) || ninja -j 1
+          # Chỉ dùng 2 CPU để build nhằm tránh lỗi tràn bộ nhớ (OOM) trên GitHub
+          ninja -j 2
+
+          
       - name: Prepare AppDir and Package AppImage
         run: |
           # Tải công cụ đóng gói
