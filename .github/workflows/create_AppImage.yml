@@ -43,8 +43,7 @@ jobs:
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
-            libvpx-dev \
-            gobject-introspection libgirepository1.0-dev # <--- ĐÃ THÊM GÓI NÀY (Sửa lỗi g-ir-scanner)
+            libvpx-dev gobject-introspection libgirepository1.0-dev
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -54,38 +53,66 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Force Library Detection (Fake Configs)
+      - name: Force Library Detection (Correct Targets)
         run: |
+          # Tạo cấu trúc thư mục config
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL \
                         /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada \
                         /usr/local/lib/cmake/tg_owt /usr/local/lib/pkgconfig
 
-          # 1. Fake Protobuf
-          echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
+          # --- 1. PROTOBUF (Thêm target libprotobuf-lite) ---
+          cat <<EOF | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
+          set(protobuf_FOUND TRUE)
+          if(NOT TARGET protobuf::libprotobuf)
+            add_library(protobuf::libprotobuf UNKNOWN IMPORTED)
+            set_target_properties(protobuf::libprotobuf PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libprotobuf.so")
+          endif()
+          if(NOT TARGET protobuf::libprotobuf-lite)
+            add_library(protobuf::libprotobuf-lite UNKNOWN IMPORTED)
+            set_target_properties(protobuf::libprotobuf-lite PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libprotobuf-lite.so")
+          endif()
+          if(NOT TARGET protobuf::protoc)
+            add_executable(protobuf::protoc IMPORTED)
+            set_target_properties(protobuf::protoc PROPERTIES IMPORTED_LOCATION "/usr/bin/protoc")
+          endif()
+          EOF
 
-          # 2. Fake OpenAL
-          echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
+          # --- 2. OPENAL (Đảm bảo tên OpenAL::OpenAL) ---
+          cat <<EOF | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
+          set(OpenAL_FOUND TRUE)
+          if(NOT TARGET OpenAL::OpenAL)
+            add_library(OpenAL::OpenAL UNKNOWN IMPORTED)
+            set_target_properties(OpenAL::OpenAL PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libopenal.so")
+            set_target_properties(OpenAL::OpenAL PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "/usr/include")
+          endif()
+          EOF
 
-          # 3. Fake Ada
-          echo 'set(ada_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo 'if(NOT TARGET ada::ada)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo '  add_library(ada::ada UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo '  set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          # --- 3. TDE2E (Sửa tên target thành tde2e::tde2e) ---
+          cat <<EOF | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          set(tde2e_FOUND TRUE)
+          if(NOT TARGET tde2e::tde2e)
+            add_library(tde2e::tde2e INTERFACE IMPORTED)
+          endif()
+          EOF
 
-          # 4. Fake tde2e
-          echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          echo 'if(NOT TARGET desktop-app::external_tde2e)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          echo '  add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          # --- 4. ADA (Giữ nguyên, đã đúng) ---
+          cat <<EOF | sudo tee /usr/local/lib/cmake/ada/adaConfig.cmake
+          set(ada_FOUND TRUE)
+          if(NOT TARGET ada::ada)
+            add_library(ada::ada UNKNOWN IMPORTED)
+            set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")
+          endif()
+          EOF
 
-          # 5. Fake tg_owt
-          echo 'set(tg_owt_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
-          echo 'if(NOT TARGET tg_owt::tg_owt)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
-          echo '  add_library(tg_owt::tg_owt INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
-          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+          # --- 5. TG_OWT (Giữ nguyên) ---
+          cat <<EOF | sudo tee /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+          set(tg_owt_FOUND TRUE)
+          if(NOT TARGET tg_owt::tg_owt)
+            add_library(tg_owt::tg_owt INTERFACE IMPORTED)
+          endif()
+          EOF
 
-          # 6. Fake RNNoise
+          # --- 6. RNNOISE (Pkg-config) ---
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
           prefix=/usr
           Name: rnnoise
