@@ -44,6 +44,31 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
+      - name: Force Library Detection (Fix rnnoise Description)
+        run: |
+          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/cmake/tde2e /usr/local/lib/pkgconfig
+          
+          # 1. Fake Protobuf & OpenAL
+          echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
+          echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
+          
+          # 2. Fake tde2e
+          echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          echo 'add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+
+          # 3. Fake RNNoise (Bổ sung Description để Pkg-config không báo lỗi)
+          cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
+          prefix=/usr
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib/x86_64-linux-gnu
+          includedir=\${prefix}/include
+          Name: rnnoise
+          Description: RNN-based noise suppression library fake config
+          Version: 0.4.1
+          Libs: -L\${libdir} -lrnnoise
+          Cflags: -I\${includedir}
+          EOF
+
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
         with:
@@ -51,45 +76,13 @@ jobs:
           dir: ${{ github.workspace }}
           modules: 'qtimageformats qtshadertools'
 
-      - name: Fix Ada Library
-        run: |
-          if [ ! -f /usr/local/lib/libada.a ]; then
-            git clone https://github.com/ada-url/ada.git
-            cd ada && git checkout v2.7.4
-            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
-            cmake --build build
-            sudo cmake --install build
-          fi
-
       - name: Build AyuGram
         env:
-          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig
         run: |
-          # 1. Đồng bộ submodule cực đoan
           git submodule sync --recursive
           git submodule update --init --recursive --force
 
-          # 2. TẠO FAKE CONFIG CHO CÁC THƯ VIỆN LÌ LỢM
-          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/cmake/tde2e /usr/local/lib/pkgconfig
-          
-          # Fake Protobuf
-          echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          
-          # Fake OpenAL
-          echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-          
-          # Fake RNNoise
-          cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
-          Name: rnnoise
-          Version: 0.4.1
-          Libs: -lrnnoise
-          EOF
-
-          # Fake tde2e: Đánh lừa CMake rằng tde2e đã tồn tại để nó bỏ qua find_package
-          echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          echo 'add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-
-          # 3. CHẠY CMAKE VỚI CÁC FLAG ÉP BUỘC
           mkdir -p build && cd build
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
