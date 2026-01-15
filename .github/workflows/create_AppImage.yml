@@ -32,7 +32,7 @@ jobs:
             ${{ runner.os }}-ccache-
           max-size: 2G
 
-      - name: Install System Dependencies
+      - name: Install All Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -49,7 +49,8 @@ jobs:
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
-            libfmt-dev # BỔ SUNG THƯ VIỆN FMT
+            libfmt-dev libopenal-dev librnnoise-dev libgoogle-perftools-dev \
+            libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
       - name: Force Protobuf Detection
         run: |
@@ -74,7 +75,7 @@ jobs:
           version: '6.5.3'
           dir: ${{ github.workspace }}
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
-          modules: 'qtimageformats qtshadertools'
+          modules: 'qtimageformats qtshadertools qtwayland'
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -90,7 +91,6 @@ jobs:
         run: |
           git submodule update --init --recursive
           mkdir -p build && cd build
-          
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -102,26 +102,22 @@ jobs:
             -DBoost_NO_BOOST_CMAKE=ON \
             -DBOOST_ROOT=/usr \
             -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
+            -DOPENAL_LIBRARY=/usr/lib/x86_64-linux-gnu/libopenal.so \
+            -DOPENAL_INCLUDE_DIR=/usr/include \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
-          
           ninja -j 2
 
       - name: Create AppImage
         run: |
+          # 1. Tải công cụ đóng gói
           wget -c https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy-x86_64.AppImage
+          
+          # 2. Tạo cấu trúc AppDir
           mkdir -p AppDir/usr/bin
-          find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
-          export VERSION=${{ github.ref_name }}
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
-          mv *.AppImage AyuGram-Linux-x86_64.AppImage
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: AyuGram-Linux-x86_64.AppImage
-          name: AyuGram Release ${{ github.ref_name }}
-          body: "Build hoàn tất. Đã bổ sung thư viện libfmt để xử lý lỗi format library."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
+          mkdir -p AppDir/usr/share/applications
+          
+          # 3. Copy file thực thi
+          find build/bin -type f -executable -exec cp
