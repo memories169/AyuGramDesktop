@@ -16,21 +16,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: recursive # Đảm bảo tải các thư viện bên thứ 3 đi kèm
+          fetch-depth: 0
 
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
-            libtgvoip-dev libavformat-dev libavcodec-dev \
-            libswresample-dev libswscale-dev libopus-dev \
-            libva-dev libvdpau-dev libasound2-dev libpulse-dev \
-            libgtk-3-dev libxcb-keysyms1-dev libxcb-record0-dev \
+            libavformat-dev libavcodec-dev libswresample-dev \
+            libswscale-dev libopus-dev libva-dev libvdpau-dev \
+            libasound2-dev libpulse-dev libgtk-3-dev \
+            libxcb-keysyms1-dev libxcb-record0-dev \
             libxcb-screensaver0-dev libxcb-composite0-dev \
             libxcb-ewmh-dev libxcb-icccm4-dev libxcb-image0-dev \
             libxcb-util-dev libx11-xcb-dev libxtst-dev \
-            liblzma-dev libssl-dev
+            liblzma-dev libssl-dev libxcb-xkb-dev libxkbcommon-x11-dev \
+            libenchant-2-dev libsecret-1-dev # Thêm các thư viện bổ trợ thường thiếu
 
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
