@@ -75,7 +75,8 @@ jobs:
           version: '6.5.3'
           dir: ${{ github.workspace }}
           cached: ${{ steps.cache-qt.outputs.cache-hit }}
-          modules: 'qtimageformats qtshadertools qtwayland'
+          # Đã gỡ bỏ qtwayland gây lỗi
+          modules: 'qtimageformats qtshadertools'
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -140,4 +141,14 @@ jobs:
           mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
       - name: Create Checksum
-        run: sha256sum AyuGram-Linux-x86_64.AppImage > sha
+        run: sha256sum AyuGram-Linux-x86_64.AppImage > sha256.txt
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            AyuGram-Linux-x86_64.AppImage
+            sha256.txt
+          name: AyuGram Release ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
