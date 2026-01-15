@@ -44,7 +44,7 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
             libvpx-dev gobject-introspection libgirepository1.0-dev \
-            libabsl-dev libcrc32c-dev yasm # <--- THÊM DEPENDENCIES CHO TG_OWT
+            libabsl-dev yasm # <--- ĐÃ GỠ libcrc32c-dev
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -54,14 +54,26 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
+      - name: Build crc32c (Manual Build)
+        run: |
+          # Build crc32c thủ công vì không cài được qua apt
+          git clone https://github.com/google/crc32c.git
+          cd crc32c
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCRC32C_BUILD_TESTS=OFF \
+            -DCRC32C_BUILD_BENCHMARKS=OFF \
+            -DCRC32C_USE_GLOG=OFF
+          cmake --build build
+          sudo cmake --install build
+
       - name: Force Library Detection (Fake Configs)
-        # LƯU Ý: Đã gỡ bỏ phần Fake tg_owt vì chúng ta sẽ build thật ở bước sau
         run: |
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL \
                         /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada \
                         /usr/local/lib/pkgconfig
 
-          # 1. Fake Protobuf (Bắt buộc vì Ubuntu thiếu file config)
+          # 1. Fake Protobuf
           cat <<EOF | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           set(protobuf_FOUND TRUE)
           if(NOT TARGET protobuf::libprotobuf)
@@ -97,7 +109,7 @@ jobs:
           endif()
           EOF
 
-          # 4. Fake tde2e (Vẫn giữ fake để pass config, hy vọng build internal sẽ xử lý sau)
+          # 4. Fake tde2e
           cat <<EOF | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
           set(tde2e_FOUND TRUE)
           if(NOT TARGET tde2e::tde2e)
@@ -116,7 +128,6 @@ jobs:
 
       - name: Build tg_owt (Real Build)
         run: |
-          # Kiểm tra xem submodule có tồn tại không, nếu không thì clone
           if [ -d "Telegram/ThirdParty/tg_owt" ]; then
             cd Telegram/ThirdParty/tg_owt
           else
@@ -125,10 +136,9 @@ jobs:
             cd Telegram/ThirdParty/tg_owt
           fi
           
-          # Đảm bảo submodule con của tg_owt (như libyuv, crc32c) được tải
           git submodule update --init --recursive
           
-          # Build và cài đặt tg_owt vào hệ thống
+          # Build tg_owt
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -153,7 +163,6 @@ jobs:
 
           mkdir -p build && cd build
           
-          # Không cần -Dtg_owt_DIR nữa vì đã cài vào hệ thống mặc định
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
