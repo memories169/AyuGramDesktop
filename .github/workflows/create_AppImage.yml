@@ -42,7 +42,8 @@ jobs:
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
-            libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
+            libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
+            libvpx-dev # <--- ĐÃ THÊM THƯ VIỆN VPX (Sửa lỗi No package vpx)
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -52,31 +53,44 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Force Library Detection (Fake Configs for all)
+      - name: Force Library Detection (Fake Configs)
         run: |
-          # Tạo thư mục chứa các file config giả
-          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada /usr/local/lib/pkgconfig
-          
+          # Tạo thư mục
+          sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL \
+                        /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada \
+                        /usr/local/lib/cmake/tg_owt /usr/local/lib/pkgconfig
+
           # 1. Fake Protobuf
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
-          
+
           # 2. Fake OpenAL
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-          
-          # 3. Fake tde2e
-          echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          echo 'add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
 
-          # 4. Fake Ada (Chỉ định đúng thư viện đã cài ở bước trước)
+          # 3. Fake Ada
           echo 'set(ada_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo 'add_library(ada::ada UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
-          echo 'set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo 'if(NOT TARGET ada::ada)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo '  add_library(ada::ada UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo '  set_target_properties(ada::ada PROPERTIES IMPORTED_LOCATION "/usr/local/lib/libada.a" INTERFACE_INCLUDE_DIRECTORIES "/usr/local/include")' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
+          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/ada/adaConfig.cmake
 
-          # 5. Fake RNNoise (Có Description đầy đủ)
+          # 4. Fake tde2e (SỬA LỖI TRÙNG LẶP TARGET)
+          # Thêm điều kiện if(NOT TARGET) để không tạo lại nếu đã có
+          echo 'set(tde2e_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          echo 'if(NOT TARGET desktop-app::external_tde2e)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          echo '  add_library(desktop-app::external_tde2e INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+
+          # 5. Fake tg_owt (SỬA LỖI MỚI)
+          echo 'set(tg_owt_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+          echo 'if(NOT TARGET tg_owt::tg_owt)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+          echo '  add_library(tg_owt::tg_owt INTERFACE IMPORTED)' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+          echo 'endif()' | sudo tee -a /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
+
+          # 6. Fake RNNoise
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
           prefix=/usr
           Name: rnnoise
-          Description: RNN-based noise suppression library fake
+          Description: Fake rnnoise
           Version: 0.4.1
           Libs: -lrnnoise
           EOF
@@ -92,10 +106,12 @@ jobs:
         env:
           PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/lib/pkgconfig
         run: |
+          # Đồng bộ Submodule cực mạnh cho cả tg_owt
           git submodule sync --recursive
           git submodule update --init --recursive --force
 
           mkdir -p build && cd build
+          
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
@@ -106,6 +122,7 @@ jobs:
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
             -Dtde2e_DIR=/usr/local/lib/cmake/tde2e \
             -Dada_DIR=/usr/local/lib/cmake/ada \
+            -Dtg_owt_DIR=/usr/local/lib/cmake/tg_owt \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
@@ -128,3 +145,4 @@ jobs:
           name: AyuGram Release ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
