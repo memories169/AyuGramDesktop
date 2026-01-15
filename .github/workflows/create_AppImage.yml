@@ -44,7 +44,7 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
             libvpx-dev gobject-introspection libgirepository1.0-dev \
-            libabsl-dev yasm libpipewire-0.3-dev # <--- ĐÃ THÊM PIPEWIRE
+            libabsl-dev yasm libpipewire-0.3-dev libdrm-dev libgbm-dev # <--- ĐÃ THÊM libdrm và libgbm
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
