@@ -62,5 +62,4 @@
             AyuGram Portable AppImage.
             Built with Docker (CentOS 7 Env).
           # Dùng wildcard (*) để tự bắt đúng tên file linuxdeploy sinh ra
-          files: AyuGram-*-x86_64.Ap
-          pImage
+          files: AyuGram-*-x86_64.AppImage
