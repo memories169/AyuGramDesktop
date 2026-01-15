@@ -1,4 +1,4 @@
-name: Build AyuGram Professional
+name: Build AyuGram Ultimate
 
 on:
   push:
@@ -23,7 +23,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
           sudo apt-get clean
-          df -h
 
       - name: Install System Dependencies
         run: |
@@ -40,7 +39,7 @@ jobs:
             libxcb-image0-dev libxcb-util-dev libx11-xcb-dev libxtst-dev \
             libxcb-xkb-dev libxkbcommon-x11-dev libxcb-cursor-dev \
             libxcb-render-util0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            qt6-wayland # Cài đặt wayland từ apt thay vì module Qt của aqt
+            libprotobuf-dev protobuf-compiler qt6-wayland
 
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
@@ -49,41 +48,37 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'gcc_64'
-          # Chỉ giữ lại các module chắc chắn tồn tại và cần thiết
           modules: 'qtimageformats qtshadertools'
 
-      # CHIẾN THUẬT: Sử dụng phiên bản ổn định v2.7.4 để tránh lỗi constexpr trên GCC 11
-      - name: Build and Install Ada URL Library
+      - name: Fix Ada Library (v2.7.4 Stable)
         run: |
           git clone https://github.com/ada-url/ada.git
           cd ada
-          # Checkout về bản tag ổn định thay vì dùng nhánh main
           git checkout v2.7.4
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DADA_TESTS=OFF \
-            -DADA_BENCHMARKS=OFF \
-            -DCMAKE_CXX_STANDARD=20
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
           cmake --build build
           sudo cmake --install build
 
       - name: Build AyuGram
         run: |
+          # Đồng bộ lại submodule để chắc chắn không thiếu code nội bộ
           git submodule update --init --recursive
+          
           mkdir build && cd build
           
-          # Cấu hình CMake với các flag sửa lỗi Boost và Ada
+          # Cấu hình tổng hợp các flag sửa lỗi:
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
+            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
+            -DDESKTOP_APP_USE_PACKAGED=OFF \
             -DBoost_NO_BOOST_CMAKE=ON \
             -DBOOST_ROOT=/usr \
-            -DDESKTOP_APP_USE_PACKAGED=OFF \
-            -DCMAKE_POLICY_DEFAULT_CMP0135=NEW \
+            -DProtobuf_USE_STATIC_LIBS=OFF \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
-          # Sử dụng 2 luồng để tránh lỗi OOM (Out of Memory)
+          # Build giới hạn luồng để tránh tràn RAM 7GB của GitHub
           ninja -j 2
 
       - name: Create AppImage
@@ -92,7 +87,7 @@ jobs:
           chmod +x linuxdeploy-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
-          # Tìm file binary trong thư mục build/bin
+          # Tự động tìm file thực thi và đưa vào AppImage
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
           
           export VERSION=${{ github.ref_name }}
@@ -105,6 +100,6 @@ jobs:
         with:
           files: AyuGram-Linux-x86_64.AppImage
           name: AyuGram Release ${{ github.ref_name }}
-          body: "Bản build tự động AyuGram AppImage thành công."
+          body: "Build hoàn tất với đầy đủ thư viện Ada, Boost, Protobuf."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
