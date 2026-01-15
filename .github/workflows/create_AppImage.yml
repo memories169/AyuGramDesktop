@@ -26,7 +26,11 @@ jobs:
 
       - name: Install All Dependencies
         run: |
+          # Đảm bảo bật các repo universe/multiverse để tìm thấy openh264
+          sudo add-apt-repository universe
+          sudo add-apt-repository multiverse
           sudo apt-get update
+          
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config python3 python3-pip \
             libvulkan-dev vulkan-tools libwayland-dev wayland-protocols \
@@ -44,7 +48,8 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
             libvpx-dev gobject-introspection libgirepository1.0-dev \
-            libabsl-dev yasm libpipewire-0.3-dev libdrm-dev libgbm-dev # <--- ĐÃ THÊM libdrm và libgbm
+            libabsl-dev yasm libpipewire-0.3-dev libdrm-dev libgbm-dev \
+            libopenh264-dev libusrsctp-dev # <--- ĐÃ THÊM OPENH264 VÀ USRSCTP
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
