@@ -23,7 +23,6 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get clean
-          df -h
 
       - name: Install System Dependencies
         run: |
@@ -48,25 +47,36 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'gcc_64'
-          modules: 'qtimageformats qtshadertools' # Thêm shadertools cho Vulkan/Qt6
+          modules: 'qtimageformats qtshadertools'
 
-      - name: Force Update Submodules (Fix Ada error)
+      # CHIẾN THUẬT MỚI: Build và cài đặt ADA trực tiếp vào hệ thống Runner
+      - name: Build and Install Ada URL Library
         run: |
-          git submodule sync --recursive
-          git submodule update --init --recursive --force
+          git clone https://github.com/ada-url/ada.git
+          cd ada
+          git checkout v2.7.4
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
+          cmake --build build
+          sudo cmake --install build
+          # Kiểm tra xem adaConfig.cmake đã nằm trong hệ thống chưa
+          find /usr/local/lib/cmake/ada -name "*.cmake"
 
       - name: Build AyuGram
         run: |
-          mkdir build
-          cd build
-          # -DDESKTOP_APP_USE_PACKAGED=OFF: Dùng thư viện kèm theo (ada, v.v.)
-          # -DCMAKE_POLICY_DEFAULT_CMP0135=NEW: Fix lỗi thời gian khi tải dependencies
+          # Cập nhật các submodule khác của AyuGram
+          git submodule update --init --recursive
+          
+          mkdir build_ayugram
+          cd build_ayugram
+          
+          # Cấu hình CMake cho AyuGram
+          # Chúng ta trỏ CMAKE_PREFIX_PATH vào /usr/local để chắc chắn nó thấy ada
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="/usr/local" \
             -DDESKTOP_APP_USE_PACKAGED=OFF \
             -DCMAKE_POLICY_DEFAULT_CMP0135=NEW
           
-          # Build với 2 luồng để tránh tràn RAM (GitHub Actions chỉ có 7GB RAM)
           ninja -j 2
 
       - name: Prepare and Create AppImage
@@ -75,14 +85,12 @@ jobs:
           chmod +x linuxdeploy-x86_64.AppImage
           
           mkdir -p AppDir/usr/bin
-          # Lưu ý: Nếu file binary tên là 'ayugram-desktop' hoặc khác, hãy đổi tên ở đây
-          cp build/bin/ayugram AppDir/usr/bin/ayugram || cp build/bin/ayugram-desktop AppDir/usr/bin/ayugram
+          # Tìm file binary trong build_ayugram/bin
+          find build_ayugram/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
           
-          # Tạo AppImage
           export VERSION=${{ github.ref_name }}
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           
-          # Đổi tên file cuối cùng
           mv *.AppImage AyuGram-${{ github.ref_name }}-x86_64.AppImage
 
       - name: Create Release
