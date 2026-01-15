@@ -44,7 +44,7 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
             libvpx-dev gobject-introspection libgirepository1.0-dev \
-            libabsl-dev yasm # <--- ĐÃ GỠ libcrc32c-dev
+            libabsl-dev yasm libpipewire-0.3-dev # <--- ĐÃ THÊM PIPEWIRE
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -56,7 +56,6 @@ jobs:
 
       - name: Build crc32c (Manual Build)
         run: |
-          # Build crc32c thủ công vì không cài được qua apt
           git clone https://github.com/google/crc32c.git
           cd crc32c
           cmake -B build -G Ninja \
@@ -138,7 +137,6 @@ jobs:
           
           git submodule update --init --recursive
           
-          # Build tg_owt
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
