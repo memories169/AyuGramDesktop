@@ -52,10 +52,10 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
-      # CHIẾN THUẬT TỔNG LỰC: Tạo Config giả cho cả Protobuf và OpenAL
-      - name: Force Library Detection (Protobuf & OpenAL)
+      # CHIẾN THUẬT: Tạo Config giả cho Protobuf, OpenAL và RNNoise
+      - name: Force Library Detection
         run: |
-          # 1. Cho Protobuf
+          # 1. Fake Protobuf
           sudo mkdir -p /usr/local/lib/cmake/protobuf
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           echo 'add_library(protobuf::libprotobuf UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
@@ -63,11 +63,25 @@ jobs:
           echo 'add_executable(protobuf::protoc IMPORTED)' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           echo 'set_target_properties(protobuf::protoc PROPERTIES IMPORTED_LOCATION "/usr/bin/protoc")' | sudo tee -a /usr/local/lib/cmake/protobuf/protobuf-config.cmake
 
-          # 2. Cho OpenAL
+          # 2. Fake OpenAL
           sudo mkdir -p /usr/local/lib/cmake/OpenAL
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
           echo 'add_library(OpenAL::OpenAL UNKNOWN IMPORTED)' | sudo tee -a /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
           echo 'set_target_properties(OpenAL::OpenAL PROPERTIES IMPORTED_LOCATION "/usr/lib/x86_64-linux-gnu/libopenal.so" INTERFACE_INCLUDE_DIRECTORIES "/usr/include/AL")' | sudo tee -a /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
+
+          # 3. Fake RNNoise (Tạo file .pc cho pkg-config)
+          sudo mkdir -p /usr/local/lib/pkgconfig
+          cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
+          prefix=/usr
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib/x86_64-linux-gnu
+          includedir=\${prefix}/include
+          Name: rnnoise
+          Description: RNN-based noise suppression
+          Version: 0.4.1
+          Libs: -L\${libdir} -lrnnoise
+          Cflags: -I\${includedir}
+          EOF
 
       - name: Cache Qt
         id: cache-qt
@@ -99,6 +113,9 @@ jobs:
           git submodule update --init --recursive
           mkdir -p build && cd build
           
+          # Cập nhật PKG_CONFIG_PATH để CMake thấy file rnnoise.pc giả
+          export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
+          
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -123,11 +140,8 @@ jobs:
           mkdir -p AppDir/usr/bin
           find build/bin -type f -executable -exec cp {} AppDir/usr/bin/ayugram \;
           
-          # Tự động lấy icon
-          find . -name "*512*.png" -exec cp {} icon.png \;
-          
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage \
-            --desktop-file .github/workflows/ayugram.desktop || true # Tạo desktop file nếu chưa có
+          export VERSION=${{ github.ref_name }}
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
           
           mv *.AppImage AyuGram-Linux-x86_64.AppImage
 
