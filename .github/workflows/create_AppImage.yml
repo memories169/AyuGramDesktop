@@ -43,7 +43,8 @@ jobs:
             libprotobuf-dev protobuf-compiler qt6-wayland ccache \
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev \
-            libvpx-dev gobject-introspection libgirepository1.0-dev
+            libvpx-dev gobject-introspection libgirepository1.0-dev \
+            libabsl-dev libcrc32c-dev yasm # <--- THÊM DEPENDENCIES CHO TG_OWT
 
       - name: Fix Ada Library (v2.7.4 Stable)
         run: |
@@ -53,14 +54,14 @@ jobs:
           cmake --build build
           sudo cmake --install build
 
-      - name: Force Library Detection (Correct Targets)
+      - name: Force Library Detection (Fake Configs)
+        # LƯU Ý: Đã gỡ bỏ phần Fake tg_owt vì chúng ta sẽ build thật ở bước sau
         run: |
-          # Tạo cấu trúc thư mục config
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL \
                         /usr/local/lib/cmake/tde2e /usr/local/lib/cmake/ada \
-                        /usr/local/lib/cmake/tg_owt /usr/local/lib/pkgconfig
+                        /usr/local/lib/pkgconfig
 
-          # --- 1. PROTOBUF (Thêm target libprotobuf-lite) ---
+          # 1. Fake Protobuf (Bắt buộc vì Ubuntu thiếu file config)
           cat <<EOF | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           set(protobuf_FOUND TRUE)
           if(NOT TARGET protobuf::libprotobuf)
@@ -77,7 +78,7 @@ jobs:
           endif()
           EOF
 
-          # --- 2. OPENAL (Đảm bảo tên OpenAL::OpenAL) ---
+          # 2. Fake OpenAL
           cat <<EOF | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
           set(OpenAL_FOUND TRUE)
           if(NOT TARGET OpenAL::OpenAL)
@@ -87,15 +88,7 @@ jobs:
           endif()
           EOF
 
-          # --- 3. TDE2E (Sửa tên target thành tde2e::tde2e) ---
-          cat <<EOF | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
-          set(tde2e_FOUND TRUE)
-          if(NOT TARGET tde2e::tde2e)
-            add_library(tde2e::tde2e INTERFACE IMPORTED)
-          endif()
-          EOF
-
-          # --- 4. ADA (Giữ nguyên, đã đúng) ---
+          # 3. Fake Ada
           cat <<EOF | sudo tee /usr/local/lib/cmake/ada/adaConfig.cmake
           set(ada_FOUND TRUE)
           if(NOT TARGET ada::ada)
@@ -104,15 +97,15 @@ jobs:
           endif()
           EOF
 
-          # --- 5. TG_OWT (Giữ nguyên) ---
-          cat <<EOF | sudo tee /usr/local/lib/cmake/tg_owt/tg_owtConfig.cmake
-          set(tg_owt_FOUND TRUE)
-          if(NOT TARGET tg_owt::tg_owt)
-            add_library(tg_owt::tg_owt INTERFACE IMPORTED)
+          # 4. Fake tde2e (Vẫn giữ fake để pass config, hy vọng build internal sẽ xử lý sau)
+          cat <<EOF | sudo tee /usr/local/lib/cmake/tde2e/tde2eConfig.cmake
+          set(tde2e_FOUND TRUE)
+          if(NOT TARGET tde2e::tde2e)
+            add_library(tde2e::tde2e INTERFACE IMPORTED)
           endif()
           EOF
 
-          # --- 6. RNNOISE (Pkg-config) ---
+          # 5. Fake RNNoise
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
           prefix=/usr
           Name: rnnoise
@@ -120,6 +113,29 @@ jobs:
           Version: 0.4.1
           Libs: -lrnnoise
           EOF
+
+      - name: Build tg_owt (Real Build)
+        run: |
+          # Kiểm tra xem submodule có tồn tại không, nếu không thì clone
+          if [ -d "Telegram/ThirdParty/tg_owt" ]; then
+            cd Telegram/ThirdParty/tg_owt
+          else
+            echo "Submodule tg_owt not found, cloning..."
+            git clone https://github.com/desktop-app/tg_owt.git Telegram/ThirdParty/tg_owt
+            cd Telegram/ThirdParty/tg_owt
+          fi
+          
+          # Đảm bảo submodule con của tg_owt (như libyuv, crc32c) được tải
+          git submodule update --init --recursive
+          
+          # Build và cài đặt tg_owt vào hệ thống
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -DTG_OWT_PACKAGED_FONTS=ON \
+            -DTG_OWT_USE_PROTOBUF=ON
+          cmake --build build
+          sudo cmake --install build
 
       - name: Setup Qt
         uses: jurplel/install-qt-action@v3
@@ -137,6 +153,7 @@ jobs:
 
           mkdir -p build && cd build
           
+          # Không cần -Dtg_owt_DIR nữa vì đã cài vào hệ thống mặc định
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="/usr/local" \
@@ -147,7 +164,6 @@ jobs:
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
             -Dtde2e_DIR=/usr/local/lib/cmake/tde2e \
             -Dada_DIR=/usr/local/lib/cmake/ada \
-            -Dtg_owt_DIR=/usr/local/lib/cmake/tg_owt \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
