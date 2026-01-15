@@ -52,17 +52,13 @@ jobs:
             libfmt-dev libopenal-dev libunwind-dev libgoogle-perftools-dev \
             libnuma-dev libjpeg-dev libpng-dev libwebp-dev libz-dev
 
-      - name: Force Library Detection (Protobuf, OpenAL, RNNoise)
+      - name: Force Library Detection (Fake Configs)
         run: |
-          # Fake Protobuf & OpenAL (Như các bước trước)
           sudo mkdir -p /usr/local/lib/cmake/protobuf /usr/local/lib/cmake/OpenAL /usr/local/lib/pkgconfig
           echo 'set(protobuf_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/protobuf/protobuf-config.cmake
           echo 'set(OpenAL_FOUND TRUE)' | sudo tee /usr/local/lib/cmake/OpenAL/OpenALConfig.cmake
-          
-          # Fake RNNoise
           cat <<EOF | sudo tee /usr/local/lib/pkgconfig/rnnoise.pc
           Name: rnnoise
-          Description: RNN-based noise suppression
           Version: 0.4.1
           Libs: -lrnnoise
           EOF
@@ -74,7 +70,7 @@ jobs:
           dir: ${{ github.workspace }}
           modules: 'qtimageformats qtshadertools'
 
-      - name: Build and Install Ada (v2.7.4)
+      - name: Fix Ada Library
         run: |
           if [ ! -f /usr/local/lib/libada.a ]; then
             git clone https://github.com/ada-url/ada.git
@@ -86,16 +82,15 @@ jobs:
 
       - name: Build AyuGram
         run: |
-          # Đảm bảo submodule tde2e và các thành phần khác được tải
+          # BƯỚC QUAN TRỌNG: Ép buộc cập nhật tất cả submodule để sửa lỗi tde2e
           git submodule sync --recursive
-          git submodule update --init --recursive
+          git submodule update --init --recursive --force
           
           mkdir -p build && cd build
           export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH
           
-          # THÊM FLAG -DTDESKTOP_BUILD_USE_IDN=OFF hoặc lân cận nếu cần
-          # Cờ quan trọng nhất: -DDESKTOP_APP_USE_PACKAGED=OFF 
-          # giúp CMake ưu tiên build tde2e từ source thay vì tìm file config.
+          # Flag DCMAKE_DISABLE_FIND_PACKAGE_tde2e=ON thường được dùng để 
+          # ép dự án sử dụng mã nguồn trong ThirdParty thay vì tìm package hệ thống
           cmake -G Ninja .. \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -106,6 +101,7 @@ jobs:
             -DBoost_NO_BOOST_CMAKE=ON \
             -Dprotobuf_DIR=/usr/local/lib/cmake/protobuf \
             -DOpenAL_DIR=/usr/local/lib/cmake/OpenAL \
+            -DCMAKE_DISABLE_FIND_PACKAGE_tde2e=ON \
             -DTDESKTOP_API_ID=2040 \
             -DTDESKTOP_API_HASH=b18441a1ff607e10a989891a5462e627
           
