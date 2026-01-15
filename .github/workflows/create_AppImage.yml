@@ -52,11 +52,18 @@ jobs:
           # Chỉ giữ lại các module chắc chắn tồn tại và cần thiết
           modules: 'qtimageformats qtshadertools'
 
+      # CHIẾN THUẬT: Sử dụng phiên bản ổn định v2.7.4 để tránh lỗi constexpr trên GCC 11
       - name: Build and Install Ada URL Library
         run: |
           git clone https://github.com/ada-url/ada.git
           cd ada
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DADA_TESTS=OFF -DADA_BENCHMARKS=OFF
+          # Checkout về bản tag ổn định thay vì dùng nhánh main
+          git checkout v2.7.4
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DADA_TESTS=OFF \
+            -DADA_BENCHMARKS=OFF \
+            -DCMAKE_CXX_STANDARD=20
           cmake --build build
           sudo cmake --install build
 
